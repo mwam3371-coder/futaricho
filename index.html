@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ふたり帳">
+<link rel="manifest" href="manifest.webmanifest">
+<title>ふたり帳</title>
+<style>
+:root{--bg:#f7f7f2;--card:#fff;--ink:#20251f;--muted:#70776e;--line:#e4e7df;--green:#2f6848;--soft:#eaf2e9;--red:#a33d35}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;font-size:16px;padding-bottom:calc(86px + env(safe-area-inset-bottom))}
+header{padding:calc(14px + env(safe-area-inset-top)) 18px 12px;position:sticky;top:0;background:rgba(247,247,242,.96);backdrop-filter:blur(12px);z-index:5;border-bottom:1px solid var(--line)}
+.brand{font-size:24px;font-weight:800;letter-spacing:.02em}.sub{color:var(--muted);font-size:12px;margin-top:3px}
+main{max-width:620px;margin:auto;padding:16px;display:grid;gap:14px}.panel,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 2px 10px #182a1010}
+h2{font-size:17px;margin:0 0 12px}.muted{color:var(--muted);font-size:13px}.amount{font-size:30px;font-weight:800;letter-spacing:-.03em}.green{color:var(--green)}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.stack{display:grid;gap:10px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#f6f8f3;border-radius:13px;padding:12px}.stat .label{font-size:12px;color:var(--muted)}.stat strong{display:block;margin-top:5px;font-size:20px}
+button,input,select{font:inherit}button{border:0;border-radius:13px;padding:13px 15px;min-height:48px;font-weight:700;background:var(--green);color:white;cursor:pointer}button.secondary{background:var(--soft);color:var(--green)}button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}button.danger{background:#fae9e6;color:var(--red)}button:active{transform:scale(.99)}
+input,select{width:100%;min-height:46px;border:1px solid #dce1d7;border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink)}label{font-size:13px;color:var(--muted);display:grid;gap:6px}.formgrid{display:grid;gap:11px}.tabs{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(3,1fr);padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:10}.tabs button{background:transparent;color:var(--muted);padding:8px 4px;min-height:48px;font-size:12px}.tabs button.active{background:var(--soft);color:var(--green)}.tabs span{display:block;font-size:19px;margin-bottom:2px}
+.receipt{border:1px solid var(--line);border-radius:14px;padding:13px;display:grid;gap:8px}.tag{display:inline-block;background:var(--soft);color:var(--green);font-size:11px;border-radius:20px;padding:4px 8px}.tag.gray{background:#f0f1ed;color:#686e65}.lineitem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.lineitem:last-child{border-bottom:0}.checkline{display:flex;align-items:center;gap:8px;font-size:13px}.checkline input{width:20px;min-height:20px}.hidden{display:none!important}.empty{text-align:center;padding:25px 12px;color:var(--muted)}.notice{font-size:12px;color:var(--muted);line-height:1.6}.divider{height:1px;background:var(--line);margin:10px 0}
+</style>
+</head>
+<body>
+<header><div class="brand">ふたり帳</div><div class="sub">ふたりのお金を、わかりやすく。</div></header>
+<main id="app"></main>
+<nav class="tabs">
+<button data-tab="home" class="active"><span>⌂</span>ホーム</button>
+<button data-tab="records"><span>▤</span>記録一覧</button>
+<button data-tab="settings"><span>⚙</span>設定</button>
+</nav>
+<script>
+const KEY='futaricho_iphone_v1';
+const yen=n=>'¥'+Math.round(n||0).toLocaleString('ja-JP');
+const today=()=>new Date().toISOString().slice(0,10);
+let state=load();
+let tab='home';
+function load(){try{let s=JSON.parse(localStorage.getItem(KEY));if(s)return s}catch(e){}return {names:['自分','相手'],records:[
+{id:1,shop:'オーケー',date:today(),category:'日用品',recorder:0,payer:0,settled:false,items:[{name:'しょうゆ',price:298,qty:1,shared:true},{name:'みりん',price:198,qty:1,shared:true},{name:'うまい棒',price:120,qty:1,shared:false},{name:'ビール',price:598,qty:1,shared:true}]},
+{id:2,shop:'まいばすけっと',date:today(),category:'日用品',recorder:1,payer:1,settled:false,items:[{name:'ティッシュ',price:398,qty:1,shared:true},{name:'洗剤',price:328,qty:1,shared:true}]},
+{id:3,shop:'夕食',date:today(),category:'外食',recorder:0,payer:0,settled:true,items:[{name:'夕食代',price:2400,qty:1,shared:true}]}
+]}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+function total(r,sharedOnly=false){return r.items.reduce((s,i)=>s+i.price*i.qty*(!sharedOnly||i.shared?1:0),0)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function net(){let paid=[0,0],owed=[0,0];state.records.filter(r=>!r.settled).forEach(r=>{paid[r.payer]+=total(r,true);owed[0]+=total(r,true)/2;owed[1]+=total(r,true)/2});let due=state.records.filter(r=>!r.settled).reduce((s,r)=>s+total(r,true),0);let adv=[0,0];state.records.filter(r=>!r.settled).forEach(r=>adv[r.payer]+=total(r,true));let diff=adv[0]-adv[1];return {adv,due,diff}}
+function render(){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));let root=document.getElementById('app');root.innerHTML=tab==='home'?home():tab==='records'?records():settings();bind()}
+function home(){let n=net(),payer=n.diff>0?0:1,receiver=1-payer,amount=Math.abs(n.diff)/2;let unsettled=state.records.filter(r=>!r.settled);
+return `<section class="panel"><div class="muted">未精算の記録</div><div class="amount">${unsettled.length}<span style="font-size:15px;font-weight:600"> 件</span></div><div class="divider"></div><div class="stats"><div class="stat"><div class="label">${esc(state.names[0])}の立替</div><strong>${yen(n.adv[0])}</strong></div><div class="stat"><div class="label">${esc(state.names[1])}の立替</div><strong>${yen(n.adv[1])}</strong></div></div></section>
+<section class="panel"><h2>今回の精算</h2>${amount===0?`<p>今のところ精算は不要だよ。</p>`:`<p><strong>${esc(state.names[payer])}</strong> から <strong>${esc(state.names[receiver])}</strong> へ</p><div class="amount green">${yen(amount)}</div><div class="muted">未精算の共有対象分を合算し、立替額の差を折半調整した金額</div>`}<button id="settleAll" style="width:100%;margin-top:14px" ${unsettled.length?'':'disabled'}>支払い完了・まとめて精算済みにする</button></section>
+<section class="panel"><div class="row"><h2>最近の記録</h2><button class="secondary" id="goRecords">すべて見る</button></div>${unsettled.slice(0,3).map(card).join('')||'<div class="empty">未精算の記録はありません</div>'}</section>
+<section class="panel"><h2>記録を追加</h2>${addForm()}</section>
+<p class="notice">この試作品は、このiPhoneのブラウザ内にデータを保存します。別のスマホとの自動共有はまだありません。レシート撮影・自動読み取りも未対応です。</p>`}
+function card(r){return `<div class="receipt"><div class="row"><strong>${esc(r.shop)}</strong><span class="tag ${r.settled?'gray':''}">${r.settled?'精算済み':'未精算'}</span></div><div class="muted">${esc(r.date)} ・ ${esc(r.category)}</div><div class="row"><span class="muted">記帳：${esc(state.names[r.recorder])} ／ 支払：${esc(state.names[r.payer])}</span><strong>${yen(total(r,true))}</strong></div><div class="row"><span class="muted">${r.items.length}品・レシート合計 ${yen(total(r))}</span><button class="secondary" data-detail="${r.id}">詳細</button></div></div>`}
+function records(){return `<section class="panel"><h2>記録一覧</h2><div class="row"><button class="secondary filter" data-filter="all">すべて</button><button class="secondary filter" data-filter="open">未精算</button><button class="secondary filter" data-filter="done">精算済み</button></div><div id="recordList" class="stack" style="margin-top:12px">${state.records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(card).join('')||'<div class="empty">まだ記録がありません</div>'}</div></section><section class="panel"><h2>記録を追加</h2>${addForm()}</section>`}
+function addForm(){return `<form id="addForm" class="formgrid"><label>お店・内容<input name="shop" placeholder="例：スーパー、夕食" required></label><div class="stats"><label>日付<input name="date" type="date" value="${today()}" required></label><label>カテゴリ<select name="category"><option>食費</option><option>日用品</option><option>外食</option></select></label></div><div class="stats"><label>記帳した人<select name="recorder"><option value="0">${esc(state.names[0])}</option><option value="1">${esc(state.names[1])}</option></select></label><label>支払った人<select name="payer"><option value="0">${esc(state.names[0])}</option><option value="1">${esc(state.names[1])}</option></select></label></div><div class="stats"><label>商品名<input name="item" placeholder="例：牛乳" required></label><label>金額（円）<input name="price" type="number" min="0" inputmode="numeric" placeholder="300" required></label></div><div class="stats"><label>数量<input name="qty" type="number" min="1" value="1" inputmode="numeric" required></label><label class="checkline" style="align-self:end;padding:12px 0"><input type="checkbox" name="shared" checked> 共有して折半する</label></div><button type="submit">この記録を追加</button></form>`}
+function settings(){return `<section class="panel"><h2>ユーザー名</h2><form id="nameForm" class="formgrid"><label>1人目<input name="name0" value="${esc(state.names[0])}" required></label><label>2人目<input name="name1" value="${esc(state.names[1])}" required></label><button>名前を保存</button></form></section><section class="panel"><h2>バックアップ</h2><div class="stack"><button id="export" class="secondary">データを書き出す</button><label>バックアップを読み込む（JSON）<input id="importFile" type="file" accept=".json,application/json"></label><button id="reset" class="danger">サンプルデータに戻す</button></div></section><p class="notice">データはこのブラウザ内だけに保存されます。ブラウザの履歴やWebサイトデータを消すと、記録が消えることがあります。定期的にバックアップしてください。</p>`}
+function bind(){
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
+document.getElementById('goRecords')?.addEventListener('click',()=>{tab='records';render()});
+document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>detail(+b.dataset.detail));
+document.getElementById('addForm')?.addEventListener('submit',e=>{e.preventDefault();let f=new FormData(e.target);state.records.unshift({id:Date.now(),shop:f.get('shop'),date:f.get('date'),category:f.get('category'),recorder:+f.get('recorder'),payer:+f.get('payer'),settled:false,items:[{name:f.get('item'),price:+f.get('price'),qty:+f.get('qty'),shared:f.get('shared')==='on'}]});save();render();});
+document.getElementById('nameForm')?.addEventListener('submit',e=>{e.preventDefault();let f=new FormData(e.target);state.names=[f.get('name0').trim(),f.get('name1').trim()];save();render()});
+document.getElementById('settleAll')?.addEventListener('click',()=>{if(confirm('未精算の記録をすべて精算済みにする？実際に支払いが完了しているか確認してね。')){state.records.forEach(r=>r.settled=true);save();render()}});
+document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{let f=b.dataset.filter;document.getElementById('recordList').innerHTML=state.records.filter(r=>f==='all'||(f==='open'?!r.settled:r.settled)).map(card).join('')||'<div class="empty">記録がありません</div>';document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-detail]').forEach(x=>x.onclick=()=>detail(+x.dataset.detail))});
+document.getElementById('export')?.addEventListener('click',()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='futaricho-backup.json';a.click();URL.revokeObjectURL(a.href)});
+document.getElementById('importFile')?.addEventListener('change',async e=>{try{let f=e.target.files[0];if(!f)return;let s=JSON.parse(await f.text());if(!s.names||!s.records)throw Error();state=s;save();render();alert('バックアップを読み込みました')}catch(err){alert('読み込めないファイルです')}});
+document.getElementById('reset')?.addEventListener('click',()=>{if(confirm('保存した記録を置き換えてサンプルに戻す？')){localStorage.removeItem(KEY);state=load();save();render()}});
+}
+function detail(id){let r=state.records.find(x=>x.id===id);if(!r)return;let root=document.getElementById('app');root.innerHTML=`<section class="panel"><button class="ghost" id="back">← 戻る</button><h2 style="margin-top:14px">${esc(r.shop)}</h2><div class="muted">${esc(r.date)} ・ ${esc(r.category)}</div><p>記帳：${esc(state.names[r.recorder])} ／ 支払：${esc(state.names[r.payer])}</p><div class="stack">${r.items.map((i,n)=>`<div class="lineitem"><div><strong>${esc(i.name)}</strong><div class="muted">${yen(i.price)} × ${i.qty} = ${yen(i.price*i.qty)}</div></div><label class="checkline"><input type="checkbox" data-item="${n}" ${i.shared?'checked':''}>折半</label></div>`).join('')}</div><div class="divider"></div><div class="row"><span>レシート合計</span><strong>${yen(total(r))}</strong></div><div class="row"><span>共有対象合計</span><strong class="green">${yen(total(r,true))}</strong></div><div class="row"><span>1人あたり</span><strong>${yen(total(r,true)/2)}</strong></div><button id="toggleSettle" class="secondary" style="width:100%;margin-top:14px">${r.settled?'未精算に戻す':'精算済みにする'}</button></section>`;
+document.getElementById('back').onclick=()=>{tab='records';render()};document.querySelectorAll('[data-item]').forEach(c=>c.onchange=()=>{r.items[+c.dataset.item].shared=c.checked;save();detail(id)});document.getElementById('toggleSettle').onclick=()=>{r.settled=!r.settled;save();detail(id)}}
+if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});\nrender();\n</script>
+</body></html>
