@@ -145,7 +145,7 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
     preserve_interword_spaces:'1',tessedit_pageseg_mode:'6'
   });
   const text=(result.data.text||'').trim();
-  const lines=text.split(/\\n/).map(x=>x.replace(/\\s+/g,' ').trim()).filter(Boolean);
+  const lines=text.split(/\n/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
   const form=document.getElementById('addForm');
   // 店名はレシート上部の短い行を優先し、定型語や電話番号などを避ける
   const headerLines=lines.slice(0,7);
@@ -157,16 +157,16 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
     .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
     .replace(/[，]/g,',').replace(/[￥¥]/g,'¥')
     .replace(/[年]/g,'年').replace(/[月]/g,'月');
-  let dm=normalized.match(/(20\\d{2})\\s*[年\\/.-]\\s*(\\d{1,2})\\s*[月\\/.-]\\s*(\\d{1,2})\\s*日?/);
-  if(!dm){const era=normalized.match(/令和\\s*(\\d{1,2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
+  let dm=normalized.match(/(20\d{2})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})\s*日?/);
+  if(!dm){const era=normalized.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
   if(dm){const yy=Number(dm[1]),mm=Number(dm[2]),dd=Number(dm[3]);if(yy>=2000&&mm>=1&&mm<=12&&dd>=1&&dd<=31)form.elements.date.value=`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;}
   // 「合計」等がある行を優先。単に大きな数字を合計と誤認しないようにする
-  const amountLines=normalized.split(/\\n/).map(x=>x.trim()).filter(Boolean);
+  const amountLines=normalized.split(/\n/).map(x=>x.trim()).filter(Boolean);
   const totalKeywords=/(合計|総合計|お買上げ?合計|今回計|お支払|お預り|税込合計|TOTAL|小計|計)/i;
   const candidates=[];
   for(const line of amountLines){
     if(!totalKeywords.test(line)) continue;
-    const nums=[...line.matchAll(/(?:¥\\s*)?([0-9][0-9,]{1,})/g)]
+    const nums=[...line.matchAll(/(?:¥\s*)?([0-9][0-9,]{1,})/g)]
       .map(m=>Number(m[1].replace(/,/g,'')))
       .filter(n=>Number.isFinite(n)&&n>=1&&n<=9999999);
     if(nums.length) candidates.push({line,amount:nums[nums.length-1],priority:/合計|総合計|お支払|TOTAL|今回計/i.test(line)?2:1});
