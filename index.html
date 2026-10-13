@@ -102,11 +102,22 @@ return `<section class="panel"><div class="muted">未精算の記録</div><div c
 function card(r){return `<div class="receipt"><div class="row"><strong>${esc(r.shop)}</strong><span class="tag ${r.settled?'gray':''}">${r.settled?'精算済み':'未精算'}</span></div><div class="muted">${esc(r.date)} ・ ${esc(r.category)}</div><div class="row"><span class="muted">記帳：${esc(state.names[r.recorder])} ／ 支払：${esc(state.names[r.payer])}</span><strong>${yen(total(r,true))}</strong></div><div class="row"><span class="muted">${r.items.length}品・レシート合計 ${yen(total(r))}</span><button class="secondary" data-detail="${r.id}">詳細</button></div></div>`}
 function records(){return `<section class="panel"><h2>記録一覧</h2><div class="row"><button class="secondary filter" data-filter="all">すべて</button><button class="secondary filter" data-filter="open">未精算</button><button class="secondary filter" data-filter="done">精算済み</button></div><div id="recordList" class="stack" style="margin-top:12px">${state.records.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(card).join('')||'<div class="empty">まだ記録がありません</div>'}</div></section><section class="panel"><h2>新しく記帳</h2>${addForm()}</section>`}
 function addForm(){return `<form id="addForm" class="formgrid">
-<section class="receipt" style="background:#fff7f2"><strong>📸 レシートから自動記帳</strong><div class="muted">撮影または写真を選ぶと文字を読み取り、下の入力欄に反映します。登録前に編集できます。</div><label>レシート画像<input id="receiptPhoto" type="file" accept="image/*" capture="environment"></label><button type="button" class="secondary" id="readReceipt">画像から文字を読み取る</button><div id="ocrStatus" class="notice" aria-live="polite"></div></section>
+<section class="receipt" style="background:#fff7f2"><strong>📸 レシートから自動記帳</strong><div class="muted">カメラ撮影または写真ライブラリから選択できます。読み取り後、登録前に内容を確認・修正してください。</div><label>レシート画像<input id="receiptPhoto" type="file" accept="image/*"></label><button type="button" class="secondary" id="readReceipt">画像から文字を読み取る</button><div id="ocrStatus" class="notice" aria-live="polite"></div></section>
 <label>お店・内容<input name="shop" placeholder="例：スーパー、夕食" required></label><div class="stats"><label>日付<input name="date" type="date" value="${today()}" required></label><label>カテゴリ<select name="category"><option>食費</option><option>日用品</option><option>外食</option><option>その他</option></select></label></div><div class="stats"><label>記帳した人<select name="recorder"><option value="0">${esc(state.names[0])}</option><option value="1">${esc(state.names[1])}</option></select></label><label>支払った人<select name="payer"><option value="0">${esc(state.names[0])}</option><option value="1">${esc(state.names[1])}</option></select></label></div><h3 style="margin:4px 0">商品・金額（読み取り結果は編集できます）</h3><div id="itemsInput" class="stack">${itemInput(0)}</div><button type="button" class="secondary" id="addItemRow">＋ 商品を追加</button><button type="submit">確認して記帳</button></form>`}
 function itemInput(n){return `<div class="receipt item-entry"><div class="row"><strong>商品 ${n+1}</strong>${n?`<button type="button" class="danger removeItem" style="min-height:36px;padding:6px 10px">削除</button>`:''}</div><label>商品名<input name="itemName" placeholder="例：牛乳" required></label><div class="stats"><label>単価（円）<input name="itemPrice" type="number" min="0" inputmode="numeric" placeholder="300" required></label><label>数量<input name="itemQty" type="number" min="1" value="1" inputmode="numeric" required></label></div><label class="checkline"><input type="checkbox" name="itemShared" checked> 共有して折半する</label></div>`}
 function expenses(){let now=new Date(),year=expenseYearOverride||now.getFullYear(),month=expenseMonthOverride||String(now.getMonth()+1).padStart(2,'0');let chosenYear=year;let chosenMonth=month;let periodRecords=state.records.filter(r=>expenseMode==='month'?r.date.startsWith(`${chosenYear}-${chosenMonth}`):r.date.startsWith(String(chosenYear)));let spend=periodRecords.reduce((a,r)=>a+total(r),0);let shared=periodRecords.reduce((a,r)=>a+total(r,true),0);let cats=['食費','日用品','外食','その他'];let catHtml=cats.map(c=>{let v=periodRecords.filter(r=>r.category===c).reduce((a,r)=>a+total(r),0);return `<div class="row"><span>${c}</span><strong>${yen(v)}</strong></div>`}).join('');let months=Array.from({length:12},(_,i)=>{let m=String(i+1).padStart(2,'0'),v=state.records.filter(r=>r.date.startsWith(`${year}-${m}`)).reduce((a,r)=>a+total(r),0);return `<div class="row"><span>${i+1}月</span><strong>${yen(v)}</strong></div>`}).join('');return `<section class="panel"><h2>出費</h2><div class="row"><button class="${expenseMode==='month'?'':'secondary'} expenseMode" data-mode="month">月別</button><button class="${expenseMode==='year'?'':'secondary'} expenseMode" data-mode="year">年別</button></div><div class="stats" style="margin-top:12px"><label>年<select id="expenseYear">${Array.from(new Set([year,...state.records.map(r=>+r.date.slice(0,4))])).sort((a,b)=>b-a).map(y=>`<option ${y===chosenYear?'selected':''}>${y}</option>`).join('')}</select></label>${expenseMode==='month'?`<label>月<select id="expenseMonth">${Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${String(i+1).padStart(2,'0')===chosenMonth?'selected':''}>${i+1}月</option>`).join('')}</select></label>`:''}</div><div class="divider"></div><div class="muted">${expenseMode==='month'?`${year}年${Number(month)}月`:`${year}年`}の支出合計</div><div class="amount">${yen(spend)}</div><div class="row"><span class="muted">共有対象分</span><strong class="green">${yen(shared)}</strong></div></section><section class="panel"><h2>カテゴリ別</h2><div class="stack">${catHtml}</div></section>${expenseMode==='year'?`<section class="panel"><h2>${year}年の月別推移</h2><div class="stack">${months}</div></section>`:''}<p class="notice">記帳した内容をもとに集計しています。個人用の商品も支出合計に含まれます。</p>`}
 function settings(){return `<section class="panel"><h2>ユーザー名</h2><form id="nameForm" class="formgrid"><label>1人目<input name="name0" value="${esc(state.names[0])}" required></label><label>2人目<input name="name1" value="${esc(state.names[1])}" required></label><button>名前を保存</button></form></section><section class="panel"><h2>バックアップ</h2><div class="stack"><button id="export" class="secondary">データを書き出す</button><label>バックアップを読み込む（JSON）<input id="importFile" type="file" accept=".json,application/json"></label><button id="reset" class="danger">サンプルデータに戻す</button></div></section><p class="notice">データはこのブラウザ内だけに保存されます。ブラウザの履歴やWebサイトデータを消すと、記録が消えることがあります。定期的にバックアップしてください。</p>`}
+
+async function prepareReceiptImage(file){
+ const img=await new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(url);resolve(im)};im.onerror=reject;im.src=url});
+ const scale=Math.min(2.5,Math.max(1.5,2200/Math.max(img.naturalWidth,img.naturalHeight)));
+ const canvas=document.createElement('canvas');canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+ const data=ctx.getImageData(0,0,canvas.width,canvas.height),d=data.data;
+ // 明るさとコントラストを軽く補正。強い二値化は薄い印字を消すため避ける。
+ for(let i=0;i<d.length;i+=4){let y=.299*d[i]+.587*d[i+1]+.114*d[i+2];y=Math.max(0,Math.min(255,(y-128)*1.35+128));d[i]=d[i+1]=d[i+2]=y;}
+ ctx.putImageData(data,0,0);return canvas;
+}
 function bind(){
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
 document.getElementById('goRecords')?.addEventListener('click',()=>{tab='records';render()});
@@ -118,7 +129,13 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
  if(!window.Tesseract){status.textContent='文字読み取り機能を読み込めませんでした。通信状態を確認して再読み込みしてね。';return}
  const btn=document.getElementById('readReceipt');btn.disabled=true;status.textContent='文字を読み取り中…少し待ってね。';
  try{
-  const result=await Tesseract.recognize(file,'jpn+eng',{logger:m=>{if(m.status==='recognizing text')status.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`}});
+  // レシート画像を拡大・グレースケール・コントラスト調整してからOCR
+  const prepared=await prepareReceiptImage(file);
+  const result=await Tesseract.recognize(prepared,'jpn+eng',{
+   logger:m=>{if(m.status==='recognizing text')status.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`},
+   preserve_interword_spaces:'1',
+   tessedit_pageseg_mode:'6'
+  });
   const text=result.data.text||'',lines=text.split(/\n/).map(x=>x.trim()).filter(Boolean),form=document.getElementById('addForm');
   const shopLine=lines.find(x=>x.length>=2&&!/領収|レシート|電話|TEL|登録番号|〒/.test(x));
   if(shopLine)form.elements.shop.value=shopLine.slice(0,80);
@@ -126,9 +143,9 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
   if(dm)form.elements.date.value=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;
   const vals=[...text.matchAll(/(?:合計|総合計|お買上げ合計|今回計|お支払額|TOTAL)[^\d￥¥]{0,12}[￥¥]?\s*([\d,]{2,})/gi)].map(m=>Number(m[1].replace(/,/g,''))).filter(Number.isFinite);
   let amount=vals.length?vals.at(-1):null;
-  if(amount==null){const all=[...text.matchAll(/[￥¥]?\s*([\d,]{3,})\s*(?:円)?/g)].map(m=>Number(m[1].replace(/,/g,''))).filter(n=>n>=10&&n<10000000);amount=all.length?Math.max(...all):null}
+  // 「合計」などのラベルが見つからない場合は、別の数字を合計と誤認しないよう自動入力しない
   if(amount!=null){const row=document.querySelector('#itemsInput .item-entry');if(row){row.querySelector('[name=itemPrice]').value=amount;row.querySelector('[name=itemName]').value='レシート合計';row.querySelector('[name=itemQty]').value=1}}
-  status.textContent=`読み取り完了。店名・日付・金額を確認して、必要なら修正してね。${amount==null?' 金額は自動判定できなかったので手入力してね。':''}`;
+  status.textContent=`読み取り完了。OCRは誤認識することがあるので、店名・日付・合計金額をレシートと照らし合わせて確認してね。${amount==null?' 合計金額の候補が見つからなかったため、金額を手入力してね。':''}`;
  }catch(err){status.textContent='読み取りに失敗しました。明るい場所で撮り直すか、内容を手入力してね。'}
  finally{btn.disabled=false}
 });
