@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7f7f2">
+<meta name="theme-color" content="#fff7f2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="ふたり帳">
@@ -19,6 +19,51 @@ h2{font-size:17px;margin:0 0 12px}.muted{color:var(--muted);font-size:13px}.amou
 button,input,select{font:inherit}button{border:0;border-radius:13px;padding:13px 15px;min-height:48px;font-weight:700;background:var(--green);color:white;cursor:pointer}button.secondary{background:var(--soft);color:var(--green)}button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}button.danger{background:#fae9e6;color:var(--red)}button:active{transform:scale(.99)}
 input,select{width:100%;min-height:46px;border:1px solid #dce1d7;border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink)}label{font-size:13px;color:var(--muted);display:grid;gap:6px}.formgrid{display:grid;gap:11px}.tabs{position:fixed;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(3,1fr);padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:10}.tabs button{background:transparent;color:var(--muted);padding:8px 4px;min-height:48px;font-size:12px}.tabs button.active{background:var(--soft);color:var(--green)}.tabs span{display:block;font-size:19px;margin-bottom:2px}
 .receipt{border:1px solid var(--line);border-radius:14px;padding:13px;display:grid;gap:8px}.tag{display:inline-block;background:var(--soft);color:var(--green);font-size:11px;border-radius:20px;padding:4px 8px}.tag.gray{background:#f0f1ed;color:#686e65}.lineitem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.lineitem:last-child{border-bottom:0}.checkline{display:flex;align-items:center;gap:8px;font-size:13px}.checkline input{width:20px;min-height:20px}.hidden{display:none!important}.empty{text-align:center;padding:25px 12px;color:var(--muted)}.notice{font-size:12px;color:var(--muted);line-height:1.6}.divider{height:1px;background:var(--line);margin:10px 0}
+
+/* Cafe-style pink & cream visual refresh; app logic and storage key remain unchanged */
+:root{--bg:#fff7f2;--card:#fffdfb;--ink:#493a38;--muted:#927e79;--line:#f0ded8;--green:#a65368;--soft:#fbe8ed;--red:#b54b52}
+body{background:radial-gradient(ellipse at 100% 0%,#fce9ed 0,transparent 34%),var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;letter-spacing:.01em}
+header{background:rgba(255,247,242,.92);border-bottom:1px solid #f1ddd7;padding-bottom:14px}
+.brand{color:#8e4c5e;font-size:25px;letter-spacing:.06em}
+.brand:after{content:"  ♡";font-size:16px;color:#d68a9c;vertical-align:3px}
+.sub{color:#a1847e;letter-spacing:.04em}
+main{padding:16px;gap:15px}
+.panel,.card{background:rgba(255,253,251,.96);border:1px solid #f0dfda;border-radius:22px;padding:17px;box-shadow:0 5px 18px rgba(116,68,63,.055)}
+h2{color:#744b50;font-size:17px;letter-spacing:.025em}
+h3{color:#8e5964}
+.amount{color:#754955;letter-spacing:-.035em}
+.green{color:#a65368}
+.stat{background:#fff1f1;border:1px solid #f7e4e5;border-radius:16px}
+.stat .label{color:#a17d7d}
+button{background:#ad6175;border-radius:14px;box-shadow:0 2px 0 rgba(117,58,73,.08);transition:transform .12s,opacity .12s}
+button.secondary{background:#f9e7eb;color:#985568;box-shadow:none}
+button.ghost{background:#fffaf7;color:#7c5b5b;border:1px solid #ead8d2;box-shadow:none}
+button.danger{background:#fae7e5;color:#a3434a;box-shadow:none}
+button:disabled{opacity:.42}
+input,select{background:#fffdfa;border:1px solid #eadbd5;border-radius:13px;accent-color:#ad6175}
+input:focus,select:focus{outline:2px solid #efc6d0;outline-offset:1px;border-color:#d99aaa}
+label{color:#8c7470}
+.tabs{background:rgba(255,253,251,.95);border-top:1px solid #f0ded8;box-shadow:0 -5px 20px rgba(116,68,63,.045);padding-top:9px}
+.tabs button{border-radius:15px;color:#a18c88;box-shadow:none}
+.tabs button.active{background:#f9e7eb;color:#985568}
+.tabs span{font-size:20px}
+.receipt{background:#fffaf7;border-color:#f0dfda;border-radius:16px}
+.tag{background:#f9e7eb;color:#985568}
+.tag.gray{background:#f3eeea;color:#8d817a}
+.lineitem{border-color:#f0dfda}
+.empty{color:#a18b86}
+.notice{color:#a18b86}
+.divider{background:#f0dfda}
+::selection{background:#f4ccd7;color:#603b45}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+
+
+/* Small cafe illustrations: CSS-only decoration; no app logic or data changed */
+.sub:after{content:"  ☕";display:inline-block;margin-left:5px;font-size:15px;opacity:.78}
+.panel h2:after{content:"  ✿";display:inline-block;color:#d99aaa;font-size:14px;vertical-align:1px;opacity:.8}
+.receipt .tag:not(.gray):before{content:"♥ ";font-size:9px;opacity:.75}
+.tabs button.active span{filter:drop-shadow(0 1px 1px rgba(166,83,104,.16))}
+
 </style>
 </head>
 <body>
