@@ -109,18 +109,18 @@ function expenses(){let now=new Date(),year=expenseYearOverride||now.getFullYear
 function settings(){return `<section class="panel"><h2>ユーザー名</h2><form id="nameForm" class="formgrid"><label>1人目<input name="name0" value="${esc(state.names[0])}" required></label><label>2人目<input name="name1" value="${esc(state.names[1])}" required></label><button>名前を保存</button></form></section><section class="panel"><h2>バックアップ</h2><div class="stack"><button id="export" class="secondary">データを書き出す</button><label>バックアップを読み込む（JSON）<input id="importFile" type="file" accept=".json,application/json"></label><button id="reset" class="danger">サンプルデータに戻す</button></div></section><p class="notice">データはこのブラウザ内だけに保存されます。ブラウザの履歴やWebサイトデータを消すと、記録が消えることがあります。定期的にバックアップしてください。</p>`}
 
 async function prepareReceiptImage(file){
-  // iPhone Safariのメモリ負荷を抑えるため、画像は長辺1600pxまでに縮小して1枚だけ処理
+  // iPhone Safariのメモリ負荷を抑えるため、画像は長辺2000pxまでに縮小して1枚だけ処理
   const url=URL.createObjectURL(file);
   try {
     const img=await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=url});
     const maxSide=Math.max(img.naturalWidth,img.naturalHeight);
-    const scale=Math.min(1,1600/maxSide);
+    const scale=Math.min(1.35,2000/maxSide);
     const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
     const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
     const ctx=canvas.getContext('2d',{willReadFrequently:true});
     ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='medium';ctx.drawImage(img,0,0,w,h);
     const imageData=ctx.getImageData(0,0,w,h),data=imageData.data;
-    for(let i=0;i<data.length;i+=4){const gray=.299*data[i]+.587*data[i+1]+.114*data[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.35+128));data[i]=data[i+1]=data[i+2]=v;}
+    for(let i=0;i<data.length;i+=4){const gray=.299*data[i]+.587*data[i+1]+.114*data[i+2];const v=Math.max(0,Math.min(255,(gray-132)*1.55+132));data[i]=data[i+1]=data[i+2]=v;}
     ctx.putImageData(imageData,0,0);
     return canvas;
   } finally {URL.revokeObjectURL(url)}
@@ -144,16 +144,43 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
     logger:m=>{if(m.status==='recognizing text')status.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`},
     preserve_interword_spaces:'1',tessedit_pageseg_mode:'6'
   });
-  const text=(result.data.text||'').trim(),lines=text.split(/\n/).map(x=>x.trim()).filter(Boolean),form=document.getElementById('addForm');
-  const shopLine=lines.find(x=>x.length>=2&&!/領収|レシート|電話|TEL|登録番号|〒|お買上|お客様|担当/.test(x));if(shopLine)form.elements.shop.value=shopLine.slice(0,80);
-  let dm=text.match(/(20\d{2})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})\s*日?/);
-  if(!dm){const era=text.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
-  if(dm){const yy=Number(dm[1]),mm=Number(dm[2]),dd=Number(dm[3]);if(mm>=1&&mm<=12&&dd>=1&&dd<=31)form.elements.date.value=`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;}
-  const normalized=text.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[，]/g,',').replace(/[￥]/g,'¥');
-  const vals=[...normalized.matchAll(/(?:合計|総合計|お買上げ合計|今回計|お支払額|お買上額|税込合計|TOTAL|計)[^\d¥]{0,16}¥?\s*([\d,]{2,})/gi)].map(m=>Number(m[1].replace(/,/g,''))).filter(n=>Number.isFinite(n)&&n>=1);
-  let amount=vals.length?vals[vals.length-1]:null;
-  if(amount!=null){const row=document.querySelector('#itemsInput .item-entry');if(row){row.querySelector('[name=itemPrice]').value=amount;row.querySelector('[name=itemName]').value='レシート合計';row.querySelector('[name=itemQty]').value=1}}
-  status.textContent=`読み取り完了（軽量モードで1回読み取りました）。誤認識は残ることがあるので、店名・日付・金額を画像と照合して確認してね。${amount==null?' 合計金額を特定できなかったため、金額を手入力してね。':''}`;
+  const text=(result.data.text||'').trim();
+  const lines=text.split(/\\n/).map(x=>x.replace(/\\s+/g,' ').trim()).filter(Boolean);
+  const form=document.getElementById('addForm');
+  // 店名はレシート上部の短い行を優先し、定型語や電話番号などを避ける
+  const headerLines=lines.slice(0,7);
+  const shopLine=headerLines.find(x=>x.length>=2 && x.length<=45 &&
+    !/(領収|レシート|電話|TEL|登録番号|〒|お買上|お客様|担当|日時|伝票|レジ|\d{2,}[-ー]\d{2,})/i.test(x));
+  if(shopLine) form.elements.shop.value=shopLine.slice(0,80);
+  // OCRで全角数字や区切りが崩れても日付を拾いやすくする
+  const normalized=text
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[，]/g,',').replace(/[￥¥]/g,'¥')
+    .replace(/[年]/g,'年').replace(/[月]/g,'月');
+  let dm=normalized.match(/(20\\d{2})\\s*[年\\/.-]\\s*(\\d{1,2})\\s*[月\\/.-]\\s*(\\d{1,2})\\s*日?/);
+  if(!dm){const era=normalized.match(/令和\\s*(\\d{1,2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
+  if(dm){const yy=Number(dm[1]),mm=Number(dm[2]),dd=Number(dm[3]);if(yy>=2000&&mm>=1&&mm<=12&&dd>=1&&dd<=31)form.elements.date.value=`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;}
+  // 「合計」等がある行を優先。単に大きな数字を合計と誤認しないようにする
+  const amountLines=normalized.split(/\\n/).map(x=>x.trim()).filter(Boolean);
+  const totalKeywords=/(合計|総合計|お買上げ?合計|今回計|お支払|お預り|税込合計|TOTAL|小計|計)/i;
+  const candidates=[];
+  for(const line of amountLines){
+    if(!totalKeywords.test(line)) continue;
+    const nums=[...line.matchAll(/(?:¥\\s*)?([0-9][0-9,]{1,})/g)]
+      .map(m=>Number(m[1].replace(/,/g,'')))
+      .filter(n=>Number.isFinite(n)&&n>=1&&n<=9999999);
+    if(nums.length) candidates.push({line,amount:nums[nums.length-1],priority:/合計|総合計|お支払|TOTAL|今回計/i.test(line)?2:1});
+  }
+  candidates.sort((a,b)=>b.priority-a.priority);
+  const amount=candidates.length?candidates[0].amount:null;
+  if(amount!=null){
+    const row=document.querySelector('#itemsInput .item-entry');
+    if(row){row.querySelector('[name=itemPrice]').value=amount;row.querySelector('[name=itemName]').value='レシート合計';row.querySelector('[name=itemQty]').value=1}
+  }
+  let raw=document.getElementById('ocrRawText');
+  if(!raw){raw=document.createElement('details');raw.id='ocrRawText';raw.className='notice';raw.innerHTML='<summary>読み取った文字を確認</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 inherit;margin:8px 0"></pre>';status.insertAdjacentElement('afterend',raw);}
+  raw.querySelector('pre').textContent=text||'文字を認識できませんでした。';
+  status.textContent=`読み取り完了（軽量モード・1回読み取り）。店名・日付・金額を画像と照合してね。${amount==null?' 合計金額を特定できなかったため、手入力してね。':''}`;
   }catch(err){status.textContent='読み取りに失敗しました。明るい場所で撮り直すか、内容を手入力してね。'}
  finally{btn.disabled=false}
 });
