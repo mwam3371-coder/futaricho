@@ -108,18 +108,24 @@ function itemInput(n){return `<div class="receipt item-entry"><div class="row"><
 function expenses(){let now=new Date(),year=expenseYearOverride||now.getFullYear(),month=expenseMonthOverride||String(now.getMonth()+1).padStart(2,'0');let chosenYear=year;let chosenMonth=month;let periodRecords=state.records.filter(r=>expenseMode==='month'?r.date.startsWith(`${chosenYear}-${chosenMonth}`):r.date.startsWith(String(chosenYear)));let spend=periodRecords.reduce((a,r)=>a+total(r),0);let shared=periodRecords.reduce((a,r)=>a+total(r,true),0);let cats=['食費','日用品','外食','その他'];let catHtml=cats.map(c=>{let v=periodRecords.filter(r=>r.category===c).reduce((a,r)=>a+total(r),0);return `<div class="row"><span>${c}</span><strong>${yen(v)}</strong></div>`}).join('');let months=Array.from({length:12},(_,i)=>{let m=String(i+1).padStart(2,'0'),v=state.records.filter(r=>r.date.startsWith(`${year}-${m}`)).reduce((a,r)=>a+total(r),0);return `<div class="row"><span>${i+1}月</span><strong>${yen(v)}</strong></div>`}).join('');return `<section class="panel"><h2>出費</h2><div class="row"><button class="${expenseMode==='month'?'':'secondary'} expenseMode" data-mode="month">月別</button><button class="${expenseMode==='year'?'':'secondary'} expenseMode" data-mode="year">年別</button></div><div class="stats" style="margin-top:12px"><label>年<select id="expenseYear">${Array.from(new Set([year,...state.records.map(r=>+r.date.slice(0,4))])).sort((a,b)=>b-a).map(y=>`<option ${y===chosenYear?'selected':''}>${y}</option>`).join('')}</select></label>${expenseMode==='month'?`<label>月<select id="expenseMonth">${Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${String(i+1).padStart(2,'0')===chosenMonth?'selected':''}>${i+1}月</option>`).join('')}</select></label>`:''}</div><div class="divider"></div><div class="muted">${expenseMode==='month'?`${year}年${Number(month)}月`:`${year}年`}の支出合計</div><div class="amount">${yen(spend)}</div><div class="row"><span class="muted">共有対象分</span><strong class="green">${yen(shared)}</strong></div></section><section class="panel"><h2>カテゴリ別</h2><div class="stack">${catHtml}</div></section>${expenseMode==='year'?`<section class="panel"><h2>${year}年の月別推移</h2><div class="stack">${months}</div></section>`:''}<p class="notice">記帳した内容をもとに集計しています。個人用の商品も支出合計に含まれます。</p>`}
 function settings(){return `<section class="panel"><h2>ユーザー名</h2><form id="nameForm" class="formgrid"><label>1人目<input name="name0" value="${esc(state.names[0])}" required></label><label>2人目<input name="name1" value="${esc(state.names[1])}" required></label><button>名前を保存</button></form></section><section class="panel"><h2>バックアップ</h2><div class="stack"><button id="export" class="secondary">データを書き出す</button><label>バックアップを読み込む（JSON）<input id="importFile" type="file" accept=".json,application/json"></label><button id="reset" class="danger">サンプルデータに戻す</button></div></section><p class="notice">データはこのブラウザ内だけに保存されます。ブラウザの履歴やWebサイトデータを消すと、記録が消えることがあります。定期的にバックアップしてください。</p>`}
 
-async function prepareReceiptImages(file){
-  const img=await new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(url);resolve(im)};im.onerror=reject;im.src=url});
-  const maxSide=Math.max(img.naturalWidth,img.naturalHeight),scale=Math.min(3.2,Math.max(2,2600/maxSide)),w=Math.round(img.naturalWidth*scale),h=Math.round(img.naturalHeight*scale);
-  const base=document.createElement('canvas');base.width=w;base.height=h;const bctx=base.getContext('2d',{willReadFrequently:true});bctx.fillStyle='#fff';bctx.fillRect(0,0,w,h);bctx.imageSmoothingEnabled=true;bctx.imageSmoothingQuality='high';bctx.drawImage(img,0,0,w,h);
-  const px=bctx.getImageData(0,0,w,h).data,gray=new Uint8ClampedArray(w*h);for(let i=0,j=0;i<px.length;i+=4,j++)gray[j]=.299*px[i]+.587*px[i+1]+.114*px[i+2];
-  const soft=document.createElement('canvas');soft.width=w;soft.height=h;const sctx=soft.getContext('2d',{willReadFrequently:true}),sd=sctx.createImageData(w,h);
-  for(let j=0,i=0;j<gray.length;j++,i+=4){let v=Math.max(0,Math.min(255,(gray[j]-132)*1.55+132));sd.data[i]=sd.data[i+1]=sd.data[i+2]=v;sd.data[i+3]=255;}sctx.putImageData(sd,0,0);
-  const binary=document.createElement('canvas');binary.width=w;binary.height=h;const xctx=binary.getContext('2d',{willReadFrequently:true}),xd=xctx.createImageData(w,h),stride=w+1,radius=Math.max(12,Math.round(Math.min(w,h)*.012)),integral=new Float64Array((w+1)*(h+1));
-  for(let y=1;y<=h;y++){let row=0;for(let x=1;x<=w;x++){row+=gray[(y-1)*w+x-1];integral[y*stride+x]=integral[(y-1)*stride+x]+row;}}
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const x1=Math.max(0,x-radius),x2=Math.min(w-1,x+radius),y1=Math.max(0,y-radius),y2=Math.min(h-1,y+radius),sum=integral[(y2+1)*stride+x2+1]-integral[y1*stride+x2+1]-integral[(y2+1)*stride+x1]+integral[y1*stride+x1],mean=sum/((x2-x1+1)*(y2-y1+1)),v=gray[y*w+x]<mean-7?0:255,i=(y*w+x)*4;xd.data[i]=xd.data[i+1]=xd.data[i+2]=v;xd.data[i+3]=255;}xctx.putImageData(xd,0,0);
-  return [soft,base,binary];
+async function prepareReceiptImage(file){
+  // iPhone Safariのメモリ負荷を抑えるため、画像は長辺1600pxまでに縮小して1枚だけ処理
+  const url=URL.createObjectURL(file);
+  try {
+    const img=await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=url});
+    const maxSide=Math.max(img.naturalWidth,img.naturalHeight);
+    const scale=Math.min(1,1600/maxSide);
+    const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='medium';ctx.drawImage(img,0,0,w,h);
+    const imageData=ctx.getImageData(0,0,w,h),data=imageData.data;
+    for(let i=0;i<data.length;i+=4){const gray=.299*data[i]+.587*data[i+1]+.114*data[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.35+128));data[i]=data[i+1]=data[i+2]=v;}
+    ctx.putImageData(imageData,0,0);
+    return canvas;
+  } finally {URL.revokeObjectURL(url)}
 }
+
 function bind(){
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
 document.getElementById('goRecords')?.addEventListener('click',()=>{tab='records';render()});
@@ -131,24 +137,23 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
  if(!window.Tesseract){status.textContent='文字読み取り機能を読み込めませんでした。通信状態を確認して再読み込みしてね。';return}
  const btn=document.getElementById('readReceipt');btn.disabled=true;status.textContent='文字を読み取り中…少し待ってね。';
  try{
-  // レシート画像を拡大・グレースケール・コントラスト調整してからOCR
-  const preparedImages=await prepareReceiptImages(file);
-  const attempts=[],modes=['6','11','4'];let attemptNo=0;
-  for(const img of preparedImages){for(const psm of modes){attemptNo++;status.textContent=`文字を読み取り中… ${attemptNo}/9 回目`;
-   const result=await Tesseract.recognize(img,'jpn+eng',{logger:m=>{if(m.status==='recognizing text')status.textContent=`文字を読み取り中… ${attemptNo}/9 回目 (${Math.round((m.progress||0)*100)}%)`},preserve_interword_spaces:'1',tessedit_pageseg_mode:psm});
-   const recognized=(result.data.text||'').trim();if(recognized)attempts.push({text:recognized,confidence:Number(result.data.confidence)||0});
-  }}
-  const score=a=>a.confidence+(/(合計|総合計|お買上げ|お支払|TOTAL)/i.test(a.text)?12:0)+(/(20\\d{2}|令和|平成)/.test(a.text)?4:0)+Math.min(a.text.length/80,5);
-  attempts.sort((a,b)=>score(b)-score(a));const text=attempts[0]?.text||'',lines=text.split(/\\n/).map(x=>x.trim()).filter(Boolean),form=document.getElementById('addForm');
+  // 1枚の縮小画像を1回だけOCRし、Safariの処理落ちを防ぐ
+  const preparedImage=await prepareReceiptImage(file);
+  status.textContent='画像を軽量化しました。文字を読み取り中…';
+  const result=await Tesseract.recognize(preparedImage,'jpn+eng',{
+    logger:m=>{if(m.status==='recognizing text')status.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`},
+    preserve_interword_spaces:'1',tessedit_pageseg_mode:'6'
+  });
+  const text=(result.data.text||'').trim(),lines=text.split(/\n/).map(x=>x.trim()).filter(Boolean),form=document.getElementById('addForm');
   const shopLine=lines.find(x=>x.length>=2&&!/領収|レシート|電話|TEL|登録番号|〒|お買上|お客様|担当/.test(x));if(shopLine)form.elements.shop.value=shopLine.slice(0,80);
-  let dm=text.match(/(20\\d{2})\\s*[年\\/.-]\\s*(\\d{1,2})\\s*[月\\/.-]\\s*(\\d{1,2})\\s*日?/);
-  if(!dm){const era=text.match(/令和\\s*(\\d{1,2})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
+  let dm=text.match(/(20\d{2})\s*[年\/.-]\s*(\d{1,2})\s*[月\/.-]\s*(\d{1,2})\s*日?/);
+  if(!dm){const era=text.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);if(era)dm=[era[0],String(2018+Number(era[1])),era[2],era[3]];}
   if(dm){const yy=Number(dm[1]),mm=Number(dm[2]),dd=Number(dm[3]);if(mm>=1&&mm<=12&&dd>=1&&dd<=31)form.elements.date.value=`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;}
   const normalized=text.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[，]/g,',').replace(/[￥]/g,'¥');
-  const vals=[...normalized.matchAll(/(?:合計|総合計|お買上げ合計|今回計|お支払額|お買上額|税込合計|TOTAL|計)[^\\d¥]{0,16}¥?\\s*([\\d,]{2,})/gi)].map(m=>Number(m[1].replace(/,/g,''))).filter(n=>Number.isFinite(n)&&n>=1);
+  const vals=[...normalized.matchAll(/(?:合計|総合計|お買上げ合計|今回計|お支払額|お買上額|税込合計|TOTAL|計)[^\d¥]{0,16}¥?\s*([\d,]{2,})/gi)].map(m=>Number(m[1].replace(/,/g,''))).filter(n=>Number.isFinite(n)&&n>=1);
   let amount=vals.length?vals[vals.length-1]:null;
   if(amount!=null){const row=document.querySelector('#itemsInput .item-entry');if(row){row.querySelector('[name=itemPrice]').value=amount;row.querySelector('[name=itemName]').value='レシート合計';row.querySelector('[name=itemQty]').value=1}}
-  status.textContent=`読み取り完了（複数の画像補正・認識方式を比較しました）。誤認識は残ることがあるので、店名・日付・金額を画像と照合して確認してね。${amount==null?' 合計金額を特定できなかったため、金額を手入力してね。':''}`;
+  status.textContent=`読み取り完了（軽量モードで1回読み取りました）。誤認識は残ることがあるので、店名・日付・金額を画像と照合して確認してね。${amount==null?' 合計金額を特定できなかったため、金額を手入力してね。':''}`;
   }catch(err){status.textContent='読み取りに失敗しました。明るい場所で撮り直すか、内容を手入力してね。'}
  finally{btn.disabled=false}
 });
