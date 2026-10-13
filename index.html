@@ -161,7 +161,10 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
   const normalized=text
     .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
     .replace(/[，]/g,',').replace(/[￥¥]/g,'¥')
-    .replace(/[：]/g,':');
+    .replace(/[：]/g,':')
+    // OCRが「1, 068」のように桁区切りの途中に空白を入れるケースを補正
+    .replace(/(\d)\s*,\s*(\d)/g,'$1$2');
+
   let dm=normalized.match(/(20\d{2})\s*[年\/.\-]\s*(\d{1,2})\s*[月\/.\-]\s*(\d{1,2})\s*日?/);
   if(!dm){
     const era=normalized.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?/);
@@ -175,70 +178,79 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
     }
   }
 
-  // 商品明細を抽出。合計・小計・預り・釣銭などの集計行は商品として扱わない。
   const amountLines=normalized.split(/\n/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
-  const excludedLine=/(お預り|預り|お釣り|釣銭|つり銭|おつり|電話|TEL|電話番号|登録番号|カード番号|伝票番号|レジ番号|日時|営業時間|ポイント|割引|値引|クーポン|合計|小計|総計|総合計|お買上げ合計|お買い上げ合計|お支払|お支払い|支払合計|AMOUNT DUE|TOTAL|税率|対象額|税抜合計)/i;
   const numberMatches=line=>[...line.matchAll(/(?:[¥￥]\s*)?([0-9][0-9,]{0,8})(?:\s*円)?/g)]
     .map(m=>({raw:m[1],value:Number(m[1].replace(/,/g,'')),index:m.index||0,length:m[0].length}))
     .filter(n=>Number.isFinite(n.value)&&n.value>0&&n.value<=9999999);
 
-  // 合計ラベルがあれば優先。見つからない場合は、預り・釣銭・電話番号・日付などを除いた最大金額を採用。
+  // 金額行は明示的な合計ラベルを最優先。PayPay等の決済行も合計候補にする。
+  // OCRがラベルを崩した場合は、商品行の金額候補の最大値をフォールバックに使う。
   const totalCandidates=[];
   for(const line of amountLines){
-    if(/(小計|預り|お預り|釣銭|おつり|お釣り|値引|割引|税額|消費税|内税|外税|ポイント|カード番号)/i.test(line)) continue;
+    if(/(小計|預り|お預り|釣銭|おつり|お釣り|値引|割引|税額|消費税|内税|外税|ポイント|カード番号|登録番号|電話|TEL|営業時間|レジ\s*(?:No|番号)|店\s*:\s*\d)/i.test(line)) continue;
     let priority=0;
-    if(/(総合計|お買上げ合計|お買い上げ合計|税込合計|合計金額)/i.test(line)) priority=6;
-    else if(/合計/i.test(line)) priority=5;
-    else if(/(今回計|お支払金額|お支払い金額|支払合計|TOTAL|AMOUNT DUE)/i.test(line)) priority=4;
-    else if(/(^|\s)計(?:\s|:|¥|￥|$)/i.test(line)) priority=2;
+    if(/(総合計|お買上げ合計|お買い上げ合計|税込合計|合計金額|合計\s*金額)/i.test(line)) priority=7;
+    else if(/合計/i.test(line)) priority=6;
+    else if(/(今回計|お支払金額|お支払い金額|支払合計|TOTAL|AMOUNT DUE)/i.test(line)) priority=5;
+    else if(/(?:PayPay|クレジット|電子マネー|交通系IC|現金)\s*[¥￥]?\s*\d/i.test(line)) priority=4;
+    else if(/(?:=&?T|[=＝]\s*[&＆]?\s*T)\s*[¥￥]?\s*\d/i.test(line)) priority=3;
     if(!priority) continue;
     const nums=numberMatches(line);
     if(nums.length) totalCandidates.push({amount:nums[nums.length-1].value,priority});
   }
   let amount=null;
-  if(totalCandidates.length){totalCandidates.sort((a,b)=>b.priority-a.priority);amount=totalCandidates[0].amount;}
-  else {
-    const fallback=[];
+  if(totalCandidates.length){
+    totalCandidates.sort((a,b)=>b.priority-a.priority);
+    amount=totalCandidates[0].amount;
+  } else {
+    const productAmounts=[];
     for(const line of amountLines){
-      if(/(お預り|預り|お釣り|釣銭|おつり|電話|TEL|登録番号|カード番号|伝票番号|日時|営業時間|ポイント|値引|割引|クーポン|消費税|税額|税率|20\d{2}[年/.-]|令和\s*\d+年)/i.test(line)) continue;
+      if(/(小計|合計|総計|お買上げ|お買い上げ|お支払|お支払い|預り|お預り|お釣り|釣銭|おつり|ポイント|電話|TEL|登録番号|カード番号|伝票番号|レジ\s*(?:No|番号)|日時|営業時間|値引|割引|クーポン|消費税|税額|税率|対象額|20\d{2}[年/.-]|令和\s*\d+年|PayPay|クレジット|電子マネー)/i.test(line)) continue;
       const nums=numberMatches(line);
-      if(nums.length) fallback.push(...nums.map(n=>n.value));
+      if(!nums.length) continue;
+      // 商品行は末尾の金額を商品価格として扱い、先頭の商品コードは候補にしない
+      if(/[ぁ-んァ-ヶ一-龠A-Za-z]/.test(line)) productAmounts.push(nums[nums.length-1].value);
     }
-    if(fallback.length) amount=Math.max(...fallback);
+    if(productAmounts.length) amount=Math.max(...productAmounts);
   }
 
-  // 商品行の金額を項目として並べる。品名が取れない行や集計行は除外する。
+  // 商品明細を抽出。税・小計・支払方法・集計行は商品として扱わない。
   const parsedItems=[];
   const seen=new Set();
   for(const line of amountLines){
-    if(/(小計|合計|総計|お買上げ|お買い上げ|お支払|お支払い|預り|お預り|お釣り|釣銭|おつり|ポイント|電話|TEL|登録番号|伝票番号|レジ番号|日時|営業時間|値引|割引|クーポン|領収|レシート|担当|数量合計|点数)/i.test(line)) continue;
+    if(/(小計|合計|総計|お買上げ|お買い上げ|お支払|お支払い|預り|お預り|お釣り|釣銭|おつり|ポイント|電話|TEL|登録番号|伝票番号|レジ\s*(?:No|番号)|日時|営業時間|値引|割引|クーポン|領収|レシート|担当|数量合計|点数|消費税|外税|内税|税額|税率|対象額|PayPay|クレジット|電子マネー|交通系IC)/i.test(line)) continue;
     if(/20\d{2}[年/.-]|令和\s*\d+年/.test(line)) continue;
+    if(/登録番号|店\s*:\s*\d|電話番号|TEL/i.test(line)) continue;
     const nums=numberMatches(line);
     if(!nums.length) continue;
-    // 消費税が明示されている場合は支払額に含めるため独立項目にする。
-    const isTax=/(消費税|内税|外税|税額)/i.test(line);
-    if(/税率|対象額/.test(line) && !isTax) continue;
     const chosen=nums[nums.length-1];
     let name=line.slice(0,chosen.index).trim();
-    // 金額が行の先頭にあるレシートでは、金額の後ろの品名を使う。
     if(!name || !/[ぁ-んァ-ヶ一-龠A-Za-z]/.test(name)){
       name=line.slice(chosen.index+chosen.length).trim();
     }
-    name=name.replace(/[¥￥,\s:：×xX*]+$/g,'').replace(/^[\s:：×xX*]+/g,'').trim();
+    // 先頭に印字される商品コード（例：344 キャベツ 259円）を除去
+    name=name.replace(/^\s*\d{2,5}\s+/,'');
+    name=name.replace(/[¥￥,*\s:：×xX※]+$/g,'').replace(/^[\s:：×xX*※]+/g,'').trim();
     name=name.replace(/\b\d{1,3}\s*(?:点|個|本|袋|枚|パック)\b/g,'').trim();
     if(name.length<1 || name.length>48 || !/[ぁ-んァ-ヶ一-龠A-Za-z]/.test(name)) continue;
-    // 行内に金額以外の数字が多い場合は電話番号などの可能性があるため除外。
     if(/\d{5,}/.test(line.replace(/[0-9,]+\s*円?\s*$/,''))) continue;
     const key=name+'|'+chosen.value;
     if(seen.has(key)) continue;
     seen.add(key);
-    parsedItems.push({name:name.slice(0,48),price:chosen.value,qty:1,shared:true,tax:isTax});
+    parsedItems.push({name:name.slice(0,48),price:chosen.value,qty:1,shared:true});
   }
 
   const itemsRoot=document.getElementById('itemsInput');
+  let adjustmentAdded=0;
   if(itemsRoot){
     let finalItems=parsedItems.slice(0,30);
-    if(!finalItems.length && amount!=null) finalItems=[{name:'レシート合計',price:amount,qty:1,shared:true}];
+    const productSum=finalItems.reduce((sum,item)=>sum+item.price*item.qty,0);
+    // 明細の合計とレシート総額に差がある場合、1件の支払い総額が一致するよう差額を見える形で追加
+    if(finalItems.length && amount!=null && amount>productSum && amount-productSum<=Math.max(500,amount*0.35)){
+      adjustmentAdded=amount-productSum;
+      finalItems.push({name:'税・レシート調整額（要確認）',price:adjustmentAdded,qty:1,shared:true});
+    }
+    if(!finalItems.length && amount!=null) finalItems=[{name:'レシート合計（要確認）',price:amount,qty:1,shared:true}];
     if(finalItems.length){
       itemsRoot.innerHTML=finalItems.map((item,i)=>itemInput(i)).join('');
       [...itemsRoot.querySelectorAll('.item-entry')].forEach((row,i)=>{
@@ -253,7 +265,7 @@ document.getElementById('readReceipt')?.addEventListener('click',async()=>{
   let raw=document.getElementById('ocrRawText');
   if(!raw){raw=document.createElement('details');raw.id='ocrRawText';raw.className='notice';raw.innerHTML='<summary>読み取った文字を確認</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 inherit;margin:8px 0"></pre>';status.insertAdjacentElement('afterend',raw);}
   raw.querySelector('pre').textContent=text||'文字を認識できませんでした。';
-  status.textContent=`読み取り完了。商品候補 ${parsedItems.length} 件を項目に追加したよ。合計候補 ${amount==null?'なし':'¥'+amount.toLocaleString('ja-JP')}。商品名・金額をレシートと照合してね。${amount==null?' 合計金額を特定できなかったため、手入力してね。':''}`;
+  status.textContent=`読み取り完了。商品候補 ${parsedItems.length} 件を項目に追加したよ。合計候補 ${amount==null?'なし':'¥'+amount.toLocaleString('ja-JP')}。${adjustmentAdded?`差額 ${adjustmentAdded} 円を「税・レシート調整額（要確認）」として追加したよ。`:''}商品名・金額をレシートと照合してね。${amount==null?' 合計金額を特定できなかったため、手入力してね。':''}`;
   }catch(err){status.textContent='読み取りに失敗しました。明るい場所で撮り直すか、内容を手入力してね。'}
  finally{btn.disabled=false}
 });
